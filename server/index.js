@@ -4,7 +4,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require("socket.io");
 
-const {addUser, removeUser, getUsersInRoom,getUser} = require('./users.js');
+const {addUser, removeUser, getUsersInRoom,getUser} = require('./Users.js');
 
 const PORT = process.env.PORT || 5000;
 const router = require('./router');

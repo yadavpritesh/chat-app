@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import queryString from 'query-string';
 import io from 'socket.io-client';
 import './Chat.css';
@@ -12,52 +12,64 @@ const Chat = () => {
   const [room, setRoom] = useState('');
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
-  const ENDPOINT = 'http://localhost:5000';
-
   const location = useLocation();
-
-  const socket = useMemo(() => io(ENDPOINT, { transports: ['polling','flashsocket','websocket', ] }), [ENDPOINT]);
-
-  const sendMessage = useCallback((event) => {
-    event.preventDefault();
-    if (message.trim()) {
-      socket.emit('message', message, () => setMessage(''));
-    }
-  }, [message, socket]);
+  const socketRef = useRef(null);
+  const ENDPOINT = 'http://localhost:5000';
 
   useEffect(() => {
     const { name, room } = queryString.parse(location.search);
-    
     setName(name);
     setRoom(room);
-    console.log(room);
-  
-socket.emit('join', { name, room }, (response) => {
-  const { error } = response || {};
-  if (error) {
-    alert(error);
-  }
-});
 
+    // Initialize socket connection
+    socketRef.current = io(ENDPOINT, {
+      transports: ['polling', 'flashsocket', 'websocket'],
+    });
+
+    socketRef.current.emit('join', { name, room }, (response) => {
+      const { error } = response || {};
+      if (error) {
+        alert(error);
+      }
+    });
+
+    // Cleanup on component unmount
     return () => {
-      socket.disconnect();
-      socket.off('message');
+      if (socketRef.current) {
+        socketRef.current.disconnect(); // Properly disconnects the socket
+        socketRef.current.off(); // Removes all event listeners
+      }
     };
-  }, [location.search,ENDPOINT]);
+  }, [ENDPOINT, location.search]);
 
   useEffect(() => {
-    socket.on('message', (message) => {
+    if (!socketRef.current) return;
+
+    // Event listener for incoming messages
+    socketRef.current.on('message', (message) => {
       setMessages((prevMessages) => [...prevMessages, message]);
     });
-  });
 
-  console.log(message, messages);
+    // Cleanup listener on component unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('message');
+      }
+    };
+  }, []);
+
+  const sendMessage = useCallback((event) => {
+    event.preventDefault();
+    if (message.trim() && socketRef.current) {
+      socketRef.current.emit('message', message, () => setMessage(''));
+    }
+  }, [message]);
 
   return (
     <div className="outerContainer">
       <div className="container">
         <InfoBar room={room} />
-        <Messages messages={messages} name={name}/>
+        <Messages messages={messages} name={name} />
         <Input message={message} setMessage={setMessage} sendMessage={sendMessage} />
       </div>
     </div>
